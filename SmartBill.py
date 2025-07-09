@@ -1,10 +1,14 @@
-# ----- Imports & paths --------------------------------------------------------
+
+# ----- Imports & paths --------------------------------------------
+
 from pathlib import Path
-import streamlit as st, pandas as pd, joblib, shap
+import streamlit as st
+import pandas as pd, joblib, shap
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# ---------- Load trained model & data ----------------------------------------
+# ---------- Load Trained Model & Data -----------------------------
+
 MODEL_PATH = Path("model.pkl")
 model      = joblib.load(MODEL_PATH)          # scikit‑learn pipeline
 explainer  = shap.Explainer(model)
@@ -13,20 +17,16 @@ data       = pd.read_csv("electricity_bill_dataset.csv") \
                .drop(columns=["Company", "City"])
 feature_medians = data.median(numeric_only=True)
 
-# ---------- Pick only the top‑k most important inputs -------------------------
-k = 5  # ← change this if you want more/less inputs
+# ------------Select Top‑K Most Important Features -----------------
 
+k = 5  # ← change this if you want more/less inputs
 importances      = pd.Series(model.feature_importances_,index=model.feature_names_in_)
 top_features     = importances.sort_values(ascending=False).head(k).index
 
-# Map feature → widget definition
+#------------------Widget Map----------------------------------
 
-# Feature range config (based on dataset)
+# Dictionary of lambdas → each key returns a ready‑made Streamlit widget.
 
-
-# --------------------------------------------------------------
-# widget map with *no* min/max for number_input
-# --------------------------------------------------------------
 _WIDGET_MAP = {
     "Fan":            lambda: st.number_input("Fans",               0,10,1),
     "Refrigerator":   lambda: st.number_input("Refrigerators",      0,10,1),
@@ -45,23 +45,27 @@ def widget_for(feature):
     return _WIDGET_MAP.get(feature, lambda: 0)()
 
 
-# ---------- Streamlit page ----------------------------------------------------
+# -------------- Streamlit page ----------------------------------
+
 st.set_page_config(page_title="SmartBill AI")
 st.title(f"**SmartBill AI – Electricity Bill Predictor**")
 st.header("Enter your appliance usage")
-#st.write(f"Just the **{k} most important** inputs are needed:")
 st.markdown(f"This AI-powered tool predicts your electricity bill using the {k} most influential features.")
 
+#-----------------Gather Inputs-------------------------------
 
 # Collect user inputs for top‑k features, others use median defaults
 
 row = pd.Series(0, index=model.feature_names_in_)  # start with zeros for every feature
 
-for feat in top_features:                          # e.g. top‑K important features
+for feat in top_features:                         
     row[feat] = widget_for(feat)
 
-# ---------- Predict & explain -------------------------------------------------
+#----------------Predict & Local SHAP Explanation---------------
+
+# SHAP generates a waterfall chart so users see how each chosen input pushed the estimate up or down.
 if st.button("Predict"):
+
     bill = float(model.predict(pd.DataFrame([row]))[0])
     st.metric("Estimated Bill", f"₹{bill:,.0f}")
 
@@ -70,15 +74,19 @@ if st.button("Predict"):
     shap.plots.waterfall(shap_values[0], show=False)
     st.pyplot(plt.gcf())
 
-# ---------- Optional: global importance --------------------------------------
+#--------------Sidebar – Global Feature Importance------------
+
+#Horizontal bar plot of every feature’s relative importance.
 with st.sidebar:
     if st.checkbox("Show global feature importance"):
         st.subheader("Global Feature Importance")
         fig, ax = plt.subplots(figsize=(6, 0.4 * len(importances)))
         sns.barplot(x=importances.values, y=importances.index, palette="viridis", ax=ax, orient="h")
         st.pyplot(fig)
-
-#with st.sidebar:
+        
+#------------Sidebar – Performance Scatter Plot-------------
+    
+#Shows actual vs predicted for the entire training set.
     if st.sidebar.checkbox("Show model performance plot"):
         st.sidebar.info("Generating scatter plot …")
     

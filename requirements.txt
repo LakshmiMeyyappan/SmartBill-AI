@@ -1,8 +1,0 @@
-streamlit
-pandas
-numpy
-scikit-learn==1.5.1
-joblib
-matplotlib
-seaborn
-shap==0.44.1
